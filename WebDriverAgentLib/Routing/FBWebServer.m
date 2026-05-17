@@ -27,6 +27,8 @@
 
 static NSString *const FBServerURLBeginMarker = @"ServerURLHere->";
 static NSString *const FBServerURLEndMarker = @"<-ServerURLHere";
+static NSString *const IvistaWDAServerDidStartNotification = @"com.ivista.wda.server.didStart";
+static NSString *const IvistaWDAServerDidFailNotification = @"com.ivista.wda.server.didFail";
 
 @interface FBHTTPConnection : RoutingConnection
 @end
@@ -76,16 +78,24 @@ static NSString *const FBServerURLEndMarker = @"<-ServerURLHere";
 {
   [FBLogger logFmt:@"Built at %s %s", __DATE__, __TIME__];
   self.exceptionHandler = [FBExceptionHandler new];
-  [self startHTTPServer];
+  if (![self startHTTPServer]) {
+    [self runUntilStopped];
+    return;
+  }
   [self initScreenshotsBroadcaster];
 
+  [self runUntilStopped];
+}
+
+- (void)runUntilStopped
+{
   self.keepAlive = YES;
   NSRunLoop *runLoop = [NSRunLoop mainRunLoop];
   while (self.keepAlive &&
          [runLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]]);
 }
 
-- (void)startHTTPServer
+- (BOOL)startHTTPServer
 {
   self.server = [[RoutingHTTPServer alloc] init];
   [self.server setRouteQueue:dispatch_get_main_queue()];
@@ -121,11 +131,20 @@ static NSString *const FBServerURLEndMarker = @"<-ServerURLHere";
 
   if (!serverStarted) {
     [FBLogger logFmt:@"Last attempt to start web server failed with error %@", [error description]];
-    abort();
+    NSDictionary *userInfo = @{
+      @"error": error.localizedDescription ?: error.description ?: @"WebDriverAgent could not start",
+    };
+    [[NSNotificationCenter defaultCenter] postNotificationName:IvistaWDAServerDidFailNotification object:self userInfo:userInfo];
+    return NO;
   }
 
   NSString *serverHost = bindingIP ?: ([XCUIDevice sharedDevice].fb_wifiIPAddress ?: @"127.0.0.1");
-  [FBLogger logFmt:@"%@http://%@:%d%@", FBServerURLBeginMarker, serverHost, [self.server port], FBServerURLEndMarker];
+  NSString *serverURL = [NSString stringWithFormat:@"http://%@:%d", serverHost, [self.server port]];
+  [FBLogger logFmt:@"%@%@%@", FBServerURLBeginMarker, serverURL, FBServerURLEndMarker];
+  [[NSNotificationCenter defaultCenter] postNotificationName:IvistaWDAServerDidStartNotification
+                                                      object:self
+                                                    userInfo:@{@"url": serverURL}];
+  return YES;
 }
 
 - (void)initScreenshotsBroadcaster
@@ -247,6 +266,36 @@ static NSString *const FBServerURLEndMarker = @"<-ServerURLHere";
 
 - (void)registerServerKeyRouteHandlers
 {
+  [self.server get:@"/" withBlock:^(RouteRequest *request, RouteResponse *response) {
+    NSString *homePage = @"<!DOCTYPE html>"
+    "<html>"
+    "<head>"
+    "<meta charset=\"utf-8\">"
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+    "<title>iVista WDA</title>"
+    "<style>"
+    "body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f6f7f9;color:#111827;}"
+    "main{max-width:720px;margin:56px auto;padding:0 24px;}"
+    ".card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:32px;box-shadow:0 18px 50px rgba(17,24,39,.08);}"
+    ".status{display:flex;align-items:center;gap:10px;color:#047857;font-weight:700;}"
+    ".dot{width:10px;height:10px;border-radius:999px;background:#10b981;}"
+    "h1{font-size:34px;line-height:1.15;margin:18px 0 12px;}"
+    "p{font-size:16px;line-height:1.6;color:#4b5563;margin:0 0 20px;}"
+    "code{display:block;background:#111827;color:#f9fafb;border-radius:10px;padding:14px 16px;overflow:auto;}"
+    "a{color:#2563eb;text-decoration:none;font-weight:600;}"
+    "</style>"
+    "</head>"
+    "<body><main><section class=\"card\">"
+    "<div class=\"status\"><span class=\"dot\"></span><span>Connected</span></div>"
+    "<h1>iVista WDA is running</h1>"
+    "<p>This WebDriverAgent instance is ready. Keep it running while iVista controls the Simulator.</p>"
+    "<code>ivista wda status --port $USE_PORT</code>"
+    "<p style=\"margin-top:20px\"><a href=\"/status\">Open /status</a> · <a href=\"/health\">Open /health</a></p>"
+    "</section></main></body></html>";
+    NSString *port = NSProcessInfo.processInfo.environment[@"USE_PORT"] ?: @"8100";
+    [response respondWithString:[homePage stringByReplacingOccurrencesOfString:@"$USE_PORT" withString:port]];
+  }];
+
   [self.server get:@"/health" withBlock:^(RouteRequest *request, RouteResponse *response) {
     [response respondWithString:@"<!DOCTYPE html><html><title>Health Check</title><body><p>I-AM-ALIVE</p></body></html>"];
   }];
