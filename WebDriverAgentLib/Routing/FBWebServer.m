@@ -30,6 +30,60 @@ static NSString *const FBServerURLEndMarker = @"<-ServerURLHere";
 static NSString *const IvistaWDAServerDidStartNotification = @"com.ivista.wda.server.didStart";
 static NSString *const IvistaWDAServerDidFailNotification = @"com.ivista.wda.server.didFail";
 
+static NSString *IvistaHTMLPage(NSString *port)
+{
+  NSString *page = @"<!DOCTYPE html>"
+  "<html lang=\"en\">"
+  "<head>"
+  "<meta charset=\"utf-8\">"
+  "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+  "<title>iVista WDA</title>"
+  "<style>"
+  ":root{color-scheme:dark;}"
+  "body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;background:#050608;color:#f8fafc;}"
+  "body:before{content:'';position:fixed;inset:0;background:radial-gradient(circle at 20% 0%,rgba(20,184,166,.18),transparent 30%),radial-gradient(circle at 80% 20%,rgba(59,130,246,.15),transparent 34%);pointer-events:none;}"
+  "main{position:relative;max-width:900px;margin:0 auto;padding:56px 24px;}"
+  ".top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:34px;}"
+  ".brand{font-size:15px;font-weight:700;letter-spacing:.02em;color:#d1d5db;}"
+  ".pill{display:inline-flex;align-items:center;gap:9px;padding:8px 12px;border:1px solid #1f2937;border-radius:999px;background:#0b0f16;color:#a7f3d0;font-size:13px;font-weight:700;}"
+  ".dot{width:9px;height:9px;border-radius:999px;background:#22c55e;box-shadow:0 0 18px #22c55e;}"
+  ".hero{border:1px solid #1f2937;background:rgba(10,15,24,.88);border-radius:22px;padding:30px;box-shadow:0 24px 80px rgba(0,0,0,.36);}"
+  ".eyebrow{margin:0 0 10px;color:#5eead4;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;}"
+  "h1{font-size:38px;line-height:1.08;margin:0 0 14px;letter-spacing:0;}"
+  "p{font-size:16px;line-height:1.65;color:#cbd5e1;margin:0;}"
+  ".grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:22px;}"
+  ".item{display:block;border:1px solid #1f2937;border-radius:14px;padding:16px;background:#070b12;color:#e5e7eb;text-decoration:none;}"
+  ".item:hover{border-color:#38bdf8;background:#0b1220;}"
+  ".label{display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;}"
+  ".value{font-size:16px;font-weight:800;}"
+  ".api{cursor:default;}"
+  ".api:hover{border-color:#1f2937;background:#070b12;}"
+  ".cmd{margin-top:18px;background:#020617;border:1px solid #1e293b;border-radius:14px;padding:14px 16px;color:#e2e8f0;font-family:'SF Mono',Menlo,monospace;font-size:13px;overflow:auto;}"
+  ".note{margin-top:18px;font-size:13px;color:#94a3b8;}"
+  "@media(max-width:640px){main{padding:32px 16px}.top{align-items:flex-start;flex-direction:column}.hero{padding:22px}h1{font-size:30px}.grid{grid-template-columns:1fr}}"
+  "</style>"
+  "</head>"
+  "<body>"
+  "<main>"
+  "<div class=\"top\"><div class=\"brand\">iVista WebDriverAgent</div><div class=\"pill\"><span class=\"dot\"></span>Connected on port $PORT</div></div>"
+  "<section class=\"hero\">"
+  "<p class=\"eyebrow\">Ready</p>"
+  "<h1>iVista WDA is running</h1>"
+  "<p>This WebDriverAgent instance is connected and ready for iVista. Keep this process running while the CLI controls the Simulator or iPhone.</p>"
+  "<div class=\"grid\">"
+  "<div class=\"item api\"><span class=\"label\">Connection</span><span class=\"value\">Healthy</span></div>"
+  "<div class=\"item api\"><span class=\"label\">JSON API</span><span class=\"value\">/status</span></div>"
+  "<div class=\"item api\"><span class=\"label\">JSON API</span><span class=\"value\">/wda/healthcheck</span></div>"
+  "</div>"
+  "<div class=\"cmd\">ivista wda status --port $PORT<br>ivista screen texts --port $PORT</div>"
+  "<p class=\"note\">This is the only human-facing page. JSON endpoints stay raw for WebDriverAgent clients and iVista CLI compatibility.</p>"
+  "</section>"
+  "</main>"
+  "</body>"
+  "</html>";
+  return [page stringByReplacingOccurrencesOfString:@"$PORT" withString:port];
+}
+
 @interface FBHTTPConnection : RoutingConnection
 @end
 
@@ -267,37 +321,15 @@ static NSString *const IvistaWDAServerDidFailNotification = @"com.ivista.wda.ser
 - (void)registerServerKeyRouteHandlers
 {
   [self.server get:@"/" withBlock:^(RouteRequest *request, RouteResponse *response) {
-    NSString *homePage = @"<!DOCTYPE html>"
-    "<html>"
-    "<head>"
-    "<meta charset=\"utf-8\">"
-    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-    "<title>iVista WDA</title>"
-    "<style>"
-    "body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f6f7f9;color:#111827;}"
-    "main{max-width:720px;margin:56px auto;padding:0 24px;}"
-    ".card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:32px;box-shadow:0 18px 50px rgba(17,24,39,.08);}"
-    ".status{display:flex;align-items:center;gap:10px;color:#047857;font-weight:700;}"
-    ".dot{width:10px;height:10px;border-radius:999px;background:#10b981;}"
-    "h1{font-size:34px;line-height:1.15;margin:18px 0 12px;}"
-    "p{font-size:16px;line-height:1.6;color:#4b5563;margin:0 0 20px;}"
-    "code{display:block;background:#111827;color:#f9fafb;border-radius:10px;padding:14px 16px;overflow:auto;}"
-    "a{color:#2563eb;text-decoration:none;font-weight:600;}"
-    "</style>"
-    "</head>"
-    "<body><main><section class=\"card\">"
-    "<div class=\"status\"><span class=\"dot\"></span><span>Connected</span></div>"
-    "<h1>iVista WDA is running</h1>"
-    "<p>This WebDriverAgent instance is ready. Keep it running while iVista controls the Simulator.</p>"
-    "<code>ivista wda status --port $USE_PORT</code>"
-    "<p style=\"margin-top:20px\"><a href=\"/status\">Open /status</a> · <a href=\"/health\">Open /health</a></p>"
-    "</section></main></body></html>";
     NSString *port = NSProcessInfo.processInfo.environment[@"USE_PORT"] ?: @"8100";
-    [response respondWithString:[homePage stringByReplacingOccurrencesOfString:@"$USE_PORT" withString:port]];
+    [response setHeader:@"Content-Type" value:@"text/html;charset=UTF-8"];
+    [response respondWithString:IvistaHTMLPage(port)];
   }];
 
   [self.server get:@"/health" withBlock:^(RouteRequest *request, RouteResponse *response) {
-    [response respondWithString:@"<!DOCTYPE html><html><title>Health Check</title><body><p>I-AM-ALIVE</p></body></html>"];
+    NSString *port = NSProcessInfo.processInfo.environment[@"USE_PORT"] ?: @"8100";
+    [response setHeader:@"Content-Type" value:@"text/html;charset=UTF-8"];
+    [response respondWithString:IvistaHTMLPage(port)];
   }];
 
   NSString *calibrationPage = @"<html>"
